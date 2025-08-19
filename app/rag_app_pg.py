@@ -32,6 +32,15 @@ def get_embeddings():
 embedding = get_embeddings()
 
 
+def create_chunks(text: str, chunk_size, chunk_overlap) -> list:
+    start = 0
+    end = chunk_size
+    while start < len(text):
+        yield text[start:end]
+        start += chunk_size - chunk_overlap
+        end = start + chunk_size
+
+
 def read_files() -> None:
     data_folder = Path("../data")
 
@@ -39,15 +48,18 @@ def read_files() -> None:
         with src.open("r") as file:
             text = file.read()
 
-        text_splitter = CharacterTextSplitter(chunk_size=1024, chunk_overlap=50)
-        chunks = text_splitter.split_text(text)
+        # text_splitter = CharacterTextSplitter(chunk_size=1024, chunk_overlap=50)
+        # chunks = text_splitter.split_text(text)
         params = []
 
-        for doc in chunks:
+        for doc in create_chunks(text, chunk_size=1024, chunk_overlap=200):
             params.append(
                 (
                     json.dumps(
-                        {"source": src, "hash": sha256(doc.encode("utf-8")).hexdigest()}
+                        {
+                            "source": str(src),
+                            "hash": sha256(doc.encode("utf-8")).hexdigest(),
+                        }
                     ),
                     embedding.embed_query(
                         doc
@@ -131,6 +143,10 @@ while True:
             logger.info("Exiting...")
             break
         result = rag_source_chain.invoke(query)
-        logger.info(result)
+
+        logger.info("\nAnswer:\n%s", result.get("answer").strip())
+        for source in result.get("source", []):
+            logger.info("Source: %s", source)
+
     except Exception as e:
         logger.exception(f"Error: {e}. Retrying...")
