@@ -48,11 +48,13 @@ def read_files() -> None:
         with src.open("r") as file:
             text = file.read()
 
-        # text_splitter = CharacterTextSplitter(chunk_size=1024, chunk_overlap=50)
-        # chunks = text_splitter.split_text(text)
+        text_splitter = CharacterTextSplitter(
+            chunk_size=1024, chunk_overlap=200, separator="\n"
+        )
+        chunks = text_splitter.split_text(text)
         params = []
 
-        for doc in create_chunks(text, chunk_size=1024, chunk_overlap=200):
+        for doc in chunks:
             params.append(
                 (
                     json.dumps(
