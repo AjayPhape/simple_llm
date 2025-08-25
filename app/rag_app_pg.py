@@ -4,6 +4,7 @@ import os
 from hashlib import sha256
 from pathlib import Path
 
+from fastapi import FastAPI, HTTPException
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.llms import LlamaCpp
 from langchain_core.output_parsers import StrOutputParser
@@ -11,6 +12,8 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnableLambda
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from psycopg2.extras import execute_values
+from pydantic import BaseModel
+
 from simple_llm.app.pg_db import DatabaseConnection
 
 logging.basicConfig(
@@ -30,15 +33,6 @@ def get_embeddings():
 
 
 embedding = get_embeddings()
-
-
-def create_chunks(text: str, chunk_size, chunk_overlap) -> list:
-    start = 0
-    end = chunk_size
-    while start < len(text):
-        yield text[start:end]
-        start += chunk_size - chunk_overlap
-        end = start + chunk_size
 
 
 def read_files() -> None:
@@ -134,21 +128,36 @@ rag_source_chain = RunnableLambda(build_inputs) | {
     "source": lambda x: x["docs"],
 }
 
-while True:
-    try:
-        logger.info("=" * 50)
-        query = input("Enter a prompt: ").strip()
-        if not query:
-            logger.info("Please enter a valid prompt.")
-            continue
-        elif query.lower() == "exit":
-            logger.info("Exiting...")
-            break
-        result = rag_source_chain.invoke(query)
+app = FastAPI()
 
-        logger.info("\nAnswer:\n%s", result.get("answer").strip())
-        for source in result.get("source", []):
-            logger.info("Source: %s", source)
+
+class QueryRequest(BaseModel):
+    prompt: str
+
+
+class QueryResponse(BaseModel):
+    answer: str
+    sources: list
+
+
+@app.post("/query", response_model=QueryResponse)
+async def query_endpoint(request: QueryRequest):
+    try:
+        # Validate the input
+        if not request.prompt.strip():
+            raise HTTPException(status_code=400, detail="Prompt cannot be empty.")
+
+        # Invoke the RAG chain
+        result = rag_source_chain.invoke(request.prompt)
+
+        # Prepare the response
+        logger.info(f"Result {result}")
+        response = QueryResponse(
+            answer=result.get("answer").strip(),
+            sources=result.get("source", []),
+        )
+        return response
 
     except Exception as e:
-        logger.exception(f"Error: {e}. Retrying...")
+        logger.exception(f"Error processing query: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error.")
