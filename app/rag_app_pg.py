@@ -10,7 +10,7 @@ from langchain_community.llms import LlamaCpp
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnableLambda
-from langchain_huggingface.embeddings import HuggingFaceEmbeddings
+from langchain_ollama import OllamaEmbeddings
 from psycopg2.extras import execute_values
 from pydantic import BaseModel
 
@@ -26,10 +26,12 @@ logger = logging.getLogger(__name__)
 
 
 def get_embeddings():
-    return HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
-        model_kwargs={"device": "cpu"},
-    )
+    # from langchain_huggingface.embeddings import HuggingFaceEmbeddings
+    # return HuggingFaceEmbeddings(
+    #     model_name="sentence-transformers/all-MiniLM-L6-v2",
+    #     model_kwargs={"device": "cpu"},
+    # )
+    return OllamaEmbeddings(model="nomic-embed-text")
 
 
 embedding = get_embeddings()
@@ -46,9 +48,10 @@ def read_files() -> None:
             chunk_size=1024, chunk_overlap=200, separator="\n"
         )
         chunks = text_splitter.split_text(text)
+        emb_list = embedding.embed_documents(chunks)
         params = []
 
-        for doc in chunks:
+        for idx, doc in enumerate(chunks):
             params.append(
                 (
                     json.dumps(
@@ -57,9 +60,7 @@ def read_files() -> None:
                             "hash": sha256(doc.encode("utf-8")).hexdigest(),
                         }
                     ),
-                    embedding.embed_query(
-                        doc
-                    ),  # Assuming embeddings is defined globally
+                    emb_list[idx],
                     doc,
                 )
             )
