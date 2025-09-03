@@ -38,7 +38,7 @@ def build_inputs(q: str) -> dict:
             WITH tmp AS (
                 SELECT
                     content,
-                    metadata
+                    jsonb_build_object('rec_id', id) || metadata as metadata
                 FROM
                     book
                 ORDER BY
